@@ -36,6 +36,10 @@ const SPENDING_CONDITION_SIGNER_LEN: usize = 37;
 // we take 65-byte signature + 1-byte signature public-key encoding type
 const SINGLE_SPENDING_CONDITION_LEN: usize = 66;
 
+/// Number of auth fields parse in a `MultisigSpendingCondition`
+/// There can be more present, but they are parsed on an as-needed basis
+const AUTH_FIELDS_TO_PARSE: usize = 8;
+
 /// Transaction signatures are validated by calculating the public key from the signature, and
 /// verifying that all public keys hash to the signing account's hash.  To do so, we must preserve
 /// enough information in the auth structure to recover each public key's bytes.
@@ -190,7 +194,8 @@ pub struct SinglesigSpendingCondition<'a>(&'a [u8; SINGLE_SPENDING_CONDITION_LEN
 /// Each field in a `MultisigSpendingCondition` can be:
 ///  - A pubkey if potential signer has not signed
 ///  - A signature with recoverable pubkey if signer has signed
-#[derive(PartialEq, Clone)]
+#[repr(C)]
+#[derive(PartialEq, Clone, Copy)]
 #[cfg_attr(test, derive(Debug))]
 pub enum TransactionAuthField<'a> {
     PublicKey(TransactionAuthFieldID, &'a [u8; PUBKEY_LEN]),
@@ -201,11 +206,21 @@ pub enum TransactionAuthField<'a> {
 /// a transaction's execution against a Stacks address.
 /// public_keys + signatures_required determines the Principal.
 /// nonce is the "check number" for the Principal.
+#[repr(C)]
 #[derive(PartialEq, Clone)]
 #[cfg_attr(test, derive(Debug))]
 pub struct MultisigSpendingCondition<'a> {
-    /// Keep auth_fields in raw format
+    /// Number of `auth_fields` in spending condition
+    pub num_auth_fields: u32,
+    /// Keep a reference to raw auth fields
+    /// Useful to clear all `auth_fields` at once
     pub auth_fields_raw: &'a [u8],
+    /// Parse and keep references to first `AUTH_FIELDS_TO_PARSE` auth fields to access in constant time
+    /// We have to limit this to a constant-sized array because we can't used a variable-sized `std::vec`
+    pub auth_fields: ArrayVec<[TransactionAuthField<'a>; AUTH_FIELDS_TO_PARSE]>,
+    /// Keep a reference to additional fields, if present.
+    /// These can be parsed as needed
+    pub auth_field_remainder: Option<&'a [u8]>,
     /// # of signatures from potential signer set for tx to be valid
     pub signatures_required: u16,
 }
@@ -302,31 +317,41 @@ impl<'a> TransactionAuthField<'a> {
     }
 }
 
-/// For indexing into arrays
-pub enum Index {
-    /// Index from 0
-    FromZero(u32),
-    /// Index backwards from last element
-    FromLast(u32),
-}
-
 impl<'a> MultisigSpendingCondition<'a> {
     #[inline(never)]
     pub fn from_bytes(bytes: &'a [u8]) -> nom::IResult<&[u8], Self, ParserError> {
-        // Advance to the end of auth fields
-        let (end, _) = Self::field_from_bytes(bytes, Index::FromLast(0))?;
+        // First, read number of auth fields
+        let (mut last_auth_field, num_auth_fields) = Self::num_fields_from_bytes(bytes)?;
+
+        let mut auth_fields = ArrayVec::new();
+        let mut auth_field_remainder = None;
+
+        for _ in 0..num_auth_fields {
+            let (b, field) = TransactionAuthField::from_bytes(bytes)?;
+            last_auth_field = b;
+            if let Err(_) = auth_fields.try_push(field) {
+                // We're out of space in `auth_fields`.
+                // Save a reference at the first point this happens so we can parse later
+                // Ignore the rest, but keep going to advance the parser
+                _ = auth_field_remainder.get_or_insert(bytes);
+            }
+        }
 
         // Keep reference to auth fields as entire section as raw, unparsed slice
-        let bytes_taken = bytes.len() - end.len();
+        let bytes_taken = bytes.len() - last_auth_field.len();
         let (bytes, auth_fields_raw) = take(bytes_taken)(bytes)?;
 
         // Get # of sigs required to sign tx, and check it's not too high
         let (bytes, signatures_required) = be_u16(bytes)?;
+        check_canary!();
 
         Ok((
             bytes,
             Self {
+                num_auth_fields,
                 auth_fields_raw,
+                auth_fields,
+                auth_field_remainder,
                 signatures_required,
             },
         ))
@@ -337,27 +362,16 @@ impl<'a> MultisigSpendingCondition<'a> {
         be_u32(bytes)
     }
 
+    /// Parse and return auth field at `offset` starting from `bytes`
     #[inline(never)]
-    /// Parse and return auth field `index`
-    fn field_from_bytes(
+    fn field_at_offset(
         bytes: &'a [u8],
-        index: Index,
+        offset: usize,
     ) -> nom::IResult<&[u8], TransactionAuthField, ParserError> {
-        // First, read number of auth fields
-        let (mut bytes, num_fields) = Self::num_fields_from_bytes(bytes)?;
-
-        // Compute and check index
-        let index = match index {
-            Index::FromZero(i) => i,
-            Index::FromLast(i) => num_fields - 1 - i,
-        };
-
-        if index >= num_fields {
-            return Err(nom::Err::Error(ParserError::parser_value_out_of_range));
-        };
+        let mut bytes = bytes;
 
         // Parse and ignore preceding fields
-        for _ in 0..index {
+        for _ in 0..offset {
             let (b, _) = TransactionAuthField::from_bytes(bytes)?;
             bytes = b;
         }
@@ -366,12 +380,22 @@ impl<'a> MultisigSpendingCondition<'a> {
         TransactionAuthField::from_bytes(bytes)
     }
 
-    #[inline(always)]
+    #[inline(never)]
     pub fn auth_field(
         &self,
-        index: Index,
-    ) -> nom::IResult<&[u8], TransactionAuthField, ParserError> {
-        Self::field_from_bytes(self.auth_fields_raw, index)
+        index: usize,
+    ) -> Result<TransactionAuthField, ParserError> {
+        let parsed = self.auth_fields.len();
+        if index < parsed {
+            Ok(self.auth_fields[index])
+        } else if let Some(remainder) = self.auth_field_remainder {
+            let offset = index - parsed;
+            Self::field_at_offset(remainder, offset)
+                .map(|r| r.1)
+                .map_err(ParserError::from)
+        } else {
+            Err(ParserError::parser_display_idx_out_of_range)
+        }
     }
 
     #[inline(always)]
@@ -379,10 +403,9 @@ impl<'a> MultisigSpendingCondition<'a> {
         self.signatures_required
     }
 
-    pub fn num_fields(&self) -> Result<u32, ParserError> {
-        Self::num_fields_from_bytes(self.auth_fields_raw)
-            .map(|num| num.1)
-            .map_err(|_| ParserError::parser_unexpected_value)
+    #[inline(always)]
+    pub fn num_fields(&self) -> u32 {
+        self.num_auth_fields
     }
 
     fn clear_signature(&mut self) {
@@ -467,18 +490,14 @@ impl<'a> TransactionSpendingCondition<'a> {
 
     pub fn num_auth_fields(&self) -> Option<u32> {
         match self.signature {
-            SpendingConditionSignature::Multisig(ref sig) => sig.num_fields().ok(),
+            SpendingConditionSignature::Multisig(ref sig) => Some(sig.num_fields()),
             _ => None,
         }
     }
 
     pub fn get_auth_field(&self, index: u32) -> Option<Result<TransactionAuthField, ParserError>> {
         match self.signature {
-            SpendingConditionSignature::Multisig(ref sig) => Some(
-                sig.auth_field(Index::FromZero(index))
-                    .map(|r| r.1)
-                    .map_err(|e| e.into()),
-            ),
+            SpendingConditionSignature::Multisig(ref sig) => Some(sig.auth_field(index as usize)),
             _ => None,
         }
     }
