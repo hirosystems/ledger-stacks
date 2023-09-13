@@ -102,15 +102,15 @@ impl<'a> PostConditionPrincipal<'a> {
     }
 
     pub fn origin_address(
-    ) -> Result<arrayvec::ArrayVec<[u8; C32_ENCODED_ADDRS_LENGTH]>, ParserError> {
-        let mut output: ArrayVec<[_; C32_ENCODED_ADDRS_LENGTH]> = ArrayVec::new();
+    ) -> Result<arrayvec::ArrayVec<u8, C32_ENCODED_ADDRS_LENGTH>, ParserError> {
+        let mut output: ArrayVec<_, C32_ENCODED_ADDRS_LENGTH> = ArrayVec::new();
         output.try_extend_from_slice(b"Origin".as_ref()).unwrap();
         Ok(output)
     }
 
     pub fn get_principal_address(
         &self,
-    ) -> Result<arrayvec::ArrayVec<[u8; C32_ENCODED_ADDRS_LENGTH]>, ParserError> {
+    ) -> Result<arrayvec::ArrayVec<u8, C32_ENCODED_ADDRS_LENGTH>, ParserError> {
         match self {
             Self::Origin => Self::origin_address(),
             Self::Standard(ref address) | Self::Contract(ref address, _) => {
@@ -299,7 +299,7 @@ impl<'a> TransactionPostCondition<'a> {
     #[inline(never)]
     pub fn get_principal_address(
         &self,
-    ) -> Result<arrayvec::ArrayVec<[u8; C32_ENCODED_ADDRS_LENGTH]>, ParserError> {
+    ) -> Result<arrayvec::ArrayVec<u8, C32_ENCODED_ADDRS_LENGTH>, ParserError> {
         match self {
             Self::STX(principal) | Self::Fungible(principal) | Self::Nonfungible(principal) => {
                 let (_, principal) = PostConditionPrincipal::from_bytes(&principal)
@@ -345,7 +345,7 @@ impl<'a> TransactionPostCondition<'a> {
         }
     }
 
-    pub fn tokens_amount_str(&self) -> Option<ArrayVec<[u8; zxformat::MAX_STR_BUFF_LEN]>> {
+    pub fn tokens_amount_str(&self) -> Option<ArrayVec<u8, {zxformat::MAX_STR_BUFF_LEN}>> {
         let mut output = ArrayVec::from([0u8; zxformat::MAX_STR_BUFF_LEN]);
 
         let amount = self.tokens_amount()?;
@@ -356,7 +356,7 @@ impl<'a> TransactionPostCondition<'a> {
         Some(output)
     }
 
-    pub fn amount_stx_str(&self) -> Option<ArrayVec<[u8; zxformat::MAX_STR_BUFF_LEN]>> {
+    pub fn amount_stx_str(&self) -> Option<ArrayVec<u8, {zxformat::MAX_STR_BUFF_LEN}>> {
         let amount = self.amount_stx()?;
         let mut output = ArrayVec::from([0u8; zxformat::MAX_STR_BUFF_LEN]);
         let len =

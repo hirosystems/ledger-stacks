@@ -103,7 +103,7 @@ impl<'a> PrincipalData<'a> {
     #[inline(never)]
     pub fn encoded_address(
         &self,
-    ) -> Result<arrayvec::ArrayVec<[u8; C32_ENCODED_ADDRS_LENGTH]>, ParserError> {
+    ) -> Result<arrayvec::ArrayVec<u8, C32_ENCODED_ADDRS_LENGTH>, ParserError> {
         let version = self.version();
         let address = self.raw_address();
         c32::c32_address(version, address)

@@ -78,7 +78,7 @@ fn double_sha256_checksum(data: &mut [u8; SHA256_LEN]) {
 #[inline(never)]
 fn c32_encode(
     input_bytes: &[u8],
-    result: &mut ArrayVec<[u8; C32_ENCODED_ADDRS_LENGTH]>,
+    result: &mut ArrayVec<u8, C32_ENCODED_ADDRS_LENGTH>,
 ) -> Result<(), ParserError> {
     let mut carry = 0;
     let mut carry_bits = 0;
@@ -137,7 +137,7 @@ fn c32_encode(
 fn c32_check_encode(
     version: u8,
     data: &[u8],
-    c32_string: &mut ArrayVec<[u8; C32_ENCODED_ADDRS_LENGTH]>,
+    c32_string: &mut ArrayVec<u8, C32_ENCODED_ADDRS_LENGTH>,
 ) -> Result<(), ParserError> {
     if version >= 32 {
         return Err(ParserError::parser_invalid_address_version);
@@ -165,8 +165,8 @@ fn c32_check_encode(
 pub fn c32_address(
     version: u8,
     data: &[u8],
-) -> Result<arrayvec::ArrayVec<[u8; C32_ENCODED_ADDRS_LENGTH]>, ParserError> {
-    let mut c32_string = ArrayVec::<[_; C32_ENCODED_ADDRS_LENGTH]>::new();
+) -> Result<arrayvec::ArrayVec<u8, C32_ENCODED_ADDRS_LENGTH>, ParserError> {
+    let mut c32_string = ArrayVec::<_, C32_ENCODED_ADDRS_LENGTH>::new();
     c32_check_encode(version, data, &mut c32_string)?;
     c32_string.insert(0, b'S');
     Ok(c32_string)

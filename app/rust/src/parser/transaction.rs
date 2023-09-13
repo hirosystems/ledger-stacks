@@ -94,7 +94,7 @@ impl TransactionAnchorMode {
 #[derive(Clone, PartialEq)]
 #[cfg_attr(test, derive(Debug))]
 pub struct PostConditions<'a> {
-    pub(crate) conditions: ArrayVec<[&'a [u8]; NUM_SUPPORTED_POST_CONDITIONS]>,
+    pub(crate) conditions: ArrayVec<&'a [u8], NUM_SUPPORTED_POST_CONDITIONS>,
     num_items: u8,
     current_idx: u8,
 }
@@ -106,7 +106,7 @@ impl<'a> PostConditions<'a> {
         if len > NUM_SUPPORTED_POST_CONDITIONS as u32 {
             return Err(nom::Err::Error(ParserError::parser_value_out_of_range));
         }
-        let mut conditions: ArrayVec<[&'a [u8]; NUM_SUPPORTED_POST_CONDITIONS]> = ArrayVec::new();
+        let mut conditions: ArrayVec<&'a [u8], NUM_SUPPORTED_POST_CONDITIONS> = ArrayVec::new();
         let mut iter = iterator(raw, TransactionPostCondition::read_as_bytes);
         iter.take(len as _).enumerate().for_each(|i| {
             conditions.push(i.1);
@@ -362,7 +362,7 @@ impl<'a> Transaction<'a> {
 
     pub fn payload_recipient_address(
         &self,
-    ) -> Option<arrayvec::ArrayVec<[u8; C32_ENCODED_ADDRS_LENGTH]>> {
+    ) -> Option<arrayvec::ArrayVec<u8, C32_ENCODED_ADDRS_LENGTH>> {
         self.payload.recipient_address()
     }
 

@@ -124,21 +124,21 @@ impl<'a> SpendingConditionSigner<'a> {
     fn to_mainnet_address(
         &self,
         mode: HashMode,
-    ) -> Result<arrayvec::ArrayVec<[u8; C32_ENCODED_ADDRS_LENGTH]>, ParserError> {
+    ) -> Result<arrayvec::ArrayVec<u8, C32_ENCODED_ADDRS_LENGTH>, ParserError> {
         c32::c32_address(mode.to_version_mainnet(), &self.data[1..21])
     }
 
     fn to_testnet_address(
         &self,
         mode: HashMode,
-    ) -> Result<arrayvec::ArrayVec<[u8; C32_ENCODED_ADDRS_LENGTH]>, ParserError> {
+    ) -> Result<arrayvec::ArrayVec<u8, C32_ENCODED_ADDRS_LENGTH>, ParserError> {
         c32::c32_address(mode.to_version_testnet(), &self.data[1..21])
     }
 
     pub fn signer_address(
         &self,
         chain: TransactionVersion,
-    ) -> Result<arrayvec::ArrayVec<[u8; C32_ENCODED_ADDRS_LENGTH]>, ParserError> {
+    ) -> Result<arrayvec::ArrayVec<u8, C32_ENCODED_ADDRS_LENGTH>, ParserError> {
         let mode = self.hash_mode()?;
         if chain == TransactionVersion::Testnet {
             self.to_testnet_address(mode)
@@ -164,7 +164,7 @@ impl<'a> SpendingConditionSigner<'a> {
     }
 
     #[inline(never)]
-    pub fn nonce_str(&self) -> Result<ArrayVec<[u8; zxformat::MAX_STR_BUFF_LEN]>, ParserError> {
+    pub fn nonce_str(&self) -> Result<ArrayVec<u8, {zxformat::MAX_STR_BUFF_LEN}>, ParserError> {
         let mut output = ArrayVec::from([0u8; zxformat::MAX_STR_BUFF_LEN]);
         let nonce = self.nonce()?;
         let len = zxformat::u64_to_str(&mut output[..zxformat::MAX_STR_BUFF_LEN], nonce)? as usize;
@@ -175,7 +175,7 @@ impl<'a> SpendingConditionSigner<'a> {
     }
 
     #[inline(never)]
-    pub fn fee_str(&self) -> Result<ArrayVec<[u8; zxformat::MAX_STR_BUFF_LEN]>, ParserError> {
+    pub fn fee_str(&self) -> Result<ArrayVec<u8, {zxformat::MAX_STR_BUFF_LEN}>, ParserError> {
         let mut output = ArrayVec::from([0u8; zxformat::MAX_STR_BUFF_LEN]);
         let fee = self.fee()?;
         let len = zxformat::u64_to_str(output.as_mut(), fee)? as usize;
@@ -217,7 +217,7 @@ pub struct MultisigSpendingCondition<'a> {
     pub auth_fields_raw: &'a [u8],
     /// Parse and keep references to first `AUTH_FIELDS_TO_PARSE` auth fields to access in constant time
     /// We have to limit this to a constant-sized array because we can't used a variable-sized `std::vec`
-    pub auth_fields: ArrayVec<[TransactionAuthField<'a>; AUTH_FIELDS_TO_PARSE]>,
+    pub auth_fields: ArrayVec<TransactionAuthField<'a>, AUTH_FIELDS_TO_PARSE>,
     /// Keep a reference to additional fields, if present.
     /// These can be parsed as needed
     pub auth_field_remainder: Option<&'a [u8]>,
@@ -321,13 +321,13 @@ impl<'a> MultisigSpendingCondition<'a> {
     #[inline(never)]
     pub fn from_bytes(bytes: &'a [u8]) -> nom::IResult<&[u8], Self, ParserError> {
         // First, read number of auth fields
-        let (mut last_auth_field, num_auth_fields) = Self::num_fields_from_bytes(bytes)?;
+        let (mut last_auth_field, num_auth_fields) = be_u32(bytes)?;
 
         let mut auth_fields = ArrayVec::new();
         let mut auth_field_remainder = None;
 
         for _ in 0..num_auth_fields {
-            let (b, field) = TransactionAuthField::from_bytes(bytes)?;
+            let (b, field) = TransactionAuthField::from_bytes(last_auth_field)?;
             last_auth_field = b;
             if let Err(_) = auth_fields.try_push(field) {
                 // We're out of space in `auth_fields`.
@@ -355,11 +355,6 @@ impl<'a> MultisigSpendingCondition<'a> {
                 signatures_required,
             },
         ))
-    }
-
-    #[inline(always)]
-    fn num_fields_from_bytes(bytes: &'a [u8]) -> nom::IResult<&[u8], u32, ParserError> {
-        be_u32(bytes)
     }
 
     /// Parse and return auth field at `offset` starting from `bytes`
@@ -454,7 +449,7 @@ impl<'a> TransactionSpendingCondition<'a> {
     pub fn signer_address(
         &self,
         chain: TransactionVersion,
-    ) -> Result<arrayvec::ArrayVec<[u8; C32_ENCODED_ADDRS_LENGTH]>, ParserError> {
+    ) -> Result<arrayvec::ArrayVec<u8, C32_ENCODED_ADDRS_LENGTH>, ParserError> {
         self.signer.signer_address(chain)
     }
 
@@ -463,12 +458,12 @@ impl<'a> TransactionSpendingCondition<'a> {
     }
 
     #[inline(never)]
-    pub fn nonce_str(&self) -> Result<ArrayVec<[u8; zxformat::MAX_STR_BUFF_LEN]>, ParserError> {
+    pub fn nonce_str(&self) -> Result<ArrayVec<u8, {zxformat::MAX_STR_BUFF_LEN}>, ParserError> {
         self.signer.nonce_str()
     }
 
     #[inline(never)]
-    pub fn fee_str(&self) -> Result<ArrayVec<[u8; zxformat::MAX_STR_BUFF_LEN]>, ParserError> {
+    pub fn fee_str(&self) -> Result<ArrayVec<u8, {zxformat::MAX_STR_BUFF_LEN}>, ParserError> {
         self.signer.fee_str()
     }
 

@@ -262,7 +262,7 @@ impl<'a> StacksAddress<'a> {
 
     pub fn encoded_address(
         &self,
-    ) -> Result<arrayvec::ArrayVec<[u8; C32_ENCODED_ADDRS_LENGTH]>, ParserError> {
+    ) -> Result<arrayvec::ArrayVec<u8, C32_ENCODED_ADDRS_LENGTH>, ParserError> {
         c32::c32_address(self.0[0], &self.0[1..])
     }
 }

@@ -87,7 +87,7 @@ impl<'a> StxTokenTransfer<'a> {
 
     pub fn encoded_address(
         &self,
-    ) -> Result<arrayvec::ArrayVec<[u8; C32_ENCODED_ADDRS_LENGTH]>, ParserError> {
+    ) -> Result<arrayvec::ArrayVec<u8, C32_ENCODED_ADDRS_LENGTH>, ParserError> {
         // Skips the principal-id at [0] and uses hash_mode and the follow 20-bytes
         let version = self.0.get(1).ok_or(ParserError::parser_no_data)?;
         c32::c32_address(
@@ -98,7 +98,7 @@ impl<'a> StxTokenTransfer<'a> {
         )
     }
 
-    pub fn amount_stx(&self) -> Result<ArrayVec<[u8; zxformat::MAX_STR_BUFF_LEN]>, ParserError> {
+    pub fn amount_stx(&self) -> Result<ArrayVec<u8, {zxformat::MAX_STR_BUFF_LEN}>, ParserError> {
         let mut output = ArrayVec::from([0u8; zxformat::MAX_STR_BUFF_LEN]);
         let amount = self.amount()?;
         let len = zxformat::u64_to_str(output.as_mut(), amount)? as usize;
@@ -250,7 +250,7 @@ impl<'a> TransactionContractCall<'a> {
     #[inline(never)]
     pub fn contract_address(
         &self,
-    ) -> Result<arrayvec::ArrayVec<[u8; C32_ENCODED_ADDRS_LENGTH]>, ParserError> {
+    ) -> Result<arrayvec::ArrayVec<u8, C32_ENCODED_ADDRS_LENGTH>, ParserError> {
         let version = self.0[0];
         c32::c32_address(version, &self.0[1..21])
     }
@@ -619,13 +619,13 @@ impl<'a> TransactionPayload<'a> {
         }
     }
 
-    pub fn recipient_address(&self) -> Option<arrayvec::ArrayVec<[u8; C32_ENCODED_ADDRS_LENGTH]>> {
+    pub fn recipient_address(&self) -> Option<arrayvec::ArrayVec<u8, C32_ENCODED_ADDRS_LENGTH>> {
         match self {
             Self::TokenTransfer(ref token) => token.encoded_address().ok(),
             _ => None,
         }
     }
-    pub fn contract_address(&self) -> Option<arrayvec::ArrayVec<[u8; C32_ENCODED_ADDRS_LENGTH]>> {
+    pub fn contract_address(&self) -> Option<arrayvec::ArrayVec<u8, C32_ENCODED_ADDRS_LENGTH>> {
         match self {
             Self::ContractCall(ref call) => call.contract_address().ok(),
             _ => None,
