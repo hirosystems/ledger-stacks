@@ -98,11 +98,11 @@ __Z_INLINE void extract_default_path(uint32_t rx, uint32_t offset) {
 
     mainnet |= (hdPath[0] == HDPATH_0_ALTERNATIVE);
 
+    mainnet |= hdPath[0] == HDPATH_0_BTC &&
+               hdPath[1] == HDPATH_1_BTC;
+
     const bool testnet = hdPath[0] == HDPATH_0_TESTNET &&
                          hdPath[1] == HDPATH_1_TESTNET;
-
-    if (!mainnet && !testnet)
-        THROW(APDU_CODE_DATA_INVALID);
 
 }
 
