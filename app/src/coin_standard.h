@@ -39,6 +39,10 @@ extern "C" {
 
 #define HDPATH_0_ALTERNATIVE  (0x80000000u | 5757)
 
+// Allow BTC default paths also
+#define HDPATH_0_BTC         (0x80000000u | 44)
+#define HDPATH_1_BTC         (0x80000000u | 0)
+
 #define HDPATH_0_TESTNET     (0x80000000u | 0x2cu)
 #define HDPATH_1_TESTNET     (0x80000000u | 0x1u)
 
